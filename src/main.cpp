@@ -39,6 +39,10 @@ int main() {
     // load vertex and fragment shaders:
     sf::Shader shader(std::filesystem::path{"main.vert"}, std::filesystem::path{"main.frag"});
     // ... other shaders can go here...
+    sf::Shader copyShader(std::filesystem::path{"main.vert"}, std::filesystem::path{"copy.frag"});
+    sf::RenderTexture buffers[2] = {sf::RenderTexture(window.getSize()), sf::RenderTexture(window.getSize())};
+    buffers[0].setSmooth(true);
+    buffers[1].setSmooth(true);
 
     sf::Font openSansFont(EmbeddedFonts::OpenSans_SemiBold_ttf,
                           EmbeddedFonts::OpenSans_SemiBold_ttf_len);
@@ -55,6 +59,9 @@ int main() {
     sf::Vector2f c{-0.039, 0.68};
     float worldUnitsPerPixel = 1.f / window.getSize().y;
     sf::Vector2f camCenterWorld{0.f, 0.f};
+    sf::Vector2f prevCamCenterWorld = camCenterWorld;
+    float prevWorldUnitsPerPixel = worldUnitsPerPixel;
+    sf::Vector2f prevC = c;
     int maxIters = INIT_ITERS;
 
     int i = -1;
@@ -113,18 +120,41 @@ int main() {
         } else {
             maxIters = std::min(maxIters * 2, TRUE_MAX_ITERS);
         }
-        // TODO set shader uniforms here...
 
+
+        // set shader uniforms here...
+        sf::RenderTexture& front = buffers[i % 2];
+        sf::RenderTexture& back = buffers[(i + 1) % 2];
+        shader.setUniform("c", c);
+        shader.setUniform("MAX_ITERS", maxIters);
+        shader.setUniform("windowSizePixels", sf::Vector2f(front.getSize()));
+        shader.setUniform("camCenterWorld", camCenterWorld);
+        shader.setUniform("camWorldUnitsPerPixel", worldUnitsPerPixel);
+
+        // reprojection uniforms
+        shader.setUniform("oldCamCenterWorld", prevCamCenterWorld);
+        shader.setUniform("oldCamWorldUnitsPerPixel", prevWorldUnitsPerPixel);
+        shader.setUniform("oldFrame", back.getTexture());
+        shader.setUniform("cChanged", i == 0 || c != prevC);
+
+        front.clear(sf::Color::Black);
+        front.draw(fullscreenTriangle, &shader);
+        front.display();
+
+        copyShader.setUniform("toCopy", front.getTexture());
         window.clear(sf::Color::Black);
-        // TODO something.draw(fullscreenTriangle, &shader);
-        // this might change as you finish more parts!
+        window.draw(fullscreenTriangle, &copyShader);
+
         cText.setString("c = (" + std::to_string(c.x) + ", " + std::to_string(c.y) + ")");
         cTextShadow.setString("c = (" + std::to_string(c.x) + ", " + std::to_string(c.y) + ")");
         window.draw(cTextShadow);
         window.draw(cText);
         window.display();
 
-        // TODO (reprojection)... update "old" states
+        // (reprojection)... update "old" states
+        prevCamCenterWorld = camCenterWorld;
+        prevWorldUnitsPerPixel = worldUnitsPerPixel;
+        prevC = c;
     }
     return 0;
 }
